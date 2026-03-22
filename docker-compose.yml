@@ -1,0 +1,145 @@
+services:
+  nexus-api:
+    build:
+      context: ./nexus-api
+      dockerfile: Dockerfile
+    container_name: nexus-api
+    restart: always
+    volumes:
+      - ./nexus-api:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/nexus
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - research-network
+
+  scout:
+    build:
+      context: ./scout
+      dockerfile: Dockerfile
+    container_name: scout-laravel
+    restart: always
+    volumes:
+      - ./scout:/var/www/html
+      - /var/www/html/node_modules
+    environment:
+      - APP_NAME=Scout
+      - APP_ENV=local
+      - APP_KEY=${APP_KEY:-base64:3sVEtLPPB0cvh0W9ks4YXrXa4LxWADPIMm6VmHgACaw=}
+      - APP_DEBUG=true
+      - APP_URL=http://localhost:8001
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=nexus
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - NEXUS_API_URL=http://nexus-api:8000
+      - QUEUE_CONNECTION=database
+    ports:
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      nexus-api:
+        condition: service_started
+    networks:
+      - research-network
+
+  scout-vite:
+    build:
+      context: ./scout
+      dockerfile: Dockerfile
+    container_name: scout-vite
+    restart: always
+    volumes:
+      - ./scout:/var/www/html
+      - /var/www/html/node_modules
+    command: npm run dev
+    ports:
+      - "5173:5173"
+    networks:
+      - research-network
+
+  scout-queue:
+    build:
+      context: ./scout
+      dockerfile: Dockerfile
+    container_name: scout-queue
+    restart: always
+    volumes:
+      - ./scout:/var/www/html
+      - /var/www/html/node_modules
+    environment:
+      - APP_NAME=Scout
+      - APP_ENV=local
+      - APP_KEY=${APP_KEY:-base64:3sVEtLPPB0cvh0W9ks4YXrXa4LxWADPIMm6VmHgACaw=}
+      - APP_DEBUG=true
+      - DB_CONNECTION=pgsql
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=nexus
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - QUEUE_CONNECTION=database
+    command: php artisan queue:work --timeout=300 --tries=1
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - research-network
+
+  db:
+    image: postgres:16-alpine
+    container_name: nexus-db
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=nexus
+    ports:
+      - "5432:5432"
+    volumes:
+      - nexus-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - research-network
+
+  adminer:
+    image: adminer
+    container_name: nexus-adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    networks:
+      - research-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: nexus-pgadmin
+    restart: always
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@nexus.com
+      - PGADMIN_DEFAULT_PASSWORD=${DB_PASSWORD:-postgres}
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - research-network
+
+networks:
+  research-network:
+    driver: bridge
+
+volumes:
+  nexus-db-data:

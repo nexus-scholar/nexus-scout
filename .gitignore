@@ -1,0 +1,36 @@
+# General
+.DS_Store
+.env
+.env.*
+.vscode
+.idea
+
+# Python (nexus-api)
+nexus-api/__pycache__/
+nexus-api/*.py[oc]
+nexus-api/.venv/
+nexus-api/build/
+nexus-api/dist/
+nexus-api/wheels/
+nexus-api/*.egg-info
+nexus-api/*.db
+nexus-api/test_nexus.db
+nexus-api/results/
+
+# PHP/Laravel (scout)
+scout/node_modules/
+scout/vendor/
+scout/public/build/
+scout/public/hot/
+scout/public/storage/
+scout/storage/*.key
+scout/storage/pail
+scout/resources/js/actions
+scout/resources/js/routes
+scout/resources/js/wayfinder
+scout/bootstrap/ssr/
+scout/.phpunit.cache/
+scout/.phpunit.result.cache
+scout/npm-debug.log
+scout/yarn-error.log
+scout/auth.json

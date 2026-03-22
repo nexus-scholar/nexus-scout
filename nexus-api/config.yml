@@ -1,0 +1,59 @@
+# Simple SLR Configuration — TomatoMAP
+# ======================================
+
+# General Settings
+mailto: "bekhouche.mouadh@univ-oeb.dz"
+year_min: 2024
+year_max: 2026
+language: "en"
+
+# Provider Configuration
+providers:
+  openalex:
+    enabled: true
+    rate_limit: 5.0
+    timeout: 30
+
+  crossref:
+    enabled: true
+    rate_limit: 1.0
+    timeout: 30
+
+  arxiv:
+    enabled: true
+    rate_limit: 0.5
+    timeout: 30
+
+  s2:
+    enabled: true
+    rate_limit: 1.0
+
+  pubmed:
+    enabled: false
+    rate_limit: 3.0
+
+  doaj:
+    enabled: true
+    rate_limit: 2.0
+
+  core:
+    enabled: false
+    rate_limit: 1.0
+
+  ieee:
+    enabled: false
+    rate_limit: 1.0
+
+# Deduplication Settings
+deduplication:
+  strategy: "conservative"
+  fuzzy_threshold: 97
+  max_year_gap: 1
+
+# Output Settings
+output:
+  directory: "results/outputs"
+  format: "csv"
+  include_raw: true
+  format: both  # Options: csv, jsonl, both, json
+  include_raw: false

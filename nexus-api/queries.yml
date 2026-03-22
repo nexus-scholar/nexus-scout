@@ -1,0 +1,181 @@
+version: 3
+project: tomatomap_slr
+
+# ===========================================================================
+# v3 DESIGN PRINCIPLES (informed by v2 pilot failure on 2026-03-12)
+# ---------------------------------------------------------------------------
+# 1. Total OR terms per query <= 8 (safe margin below OpenAlex 10-term cap)
+# 2. Prefer 2-clause AND; 3-clause only if total terms <= 7
+# 3. More queries (23) compensate for narrower individual scope
+# 4. No include_any / exclude_any on queries — screener heuristics handle it
+# 5. max-results raised to 50 (give provider ranking room to work)
+# 6. Seed papers listed at bottom for recall validation
+# ===========================================================================
+
+queries:
+  # =========================================================================
+  # Track A: Core agriculture / horticulture evidence
+  # =========================================================================
+
+  # -- Weak / semi-supervised segmentation in agriculture --
+  - id: AG_WS01
+    theme: weakly_supervised_segmentation
+    priority: high
+    query: >
+      "weakly supervised" AND "instance segmentation"
+      AND (agriculture OR plant OR crop OR tomato)
+
+  - id: AG_WS02
+    theme: weakly_supervised_segmentation
+    priority: high
+    query: >
+      ("pseudo-label" OR "pseudo label") AND segmentation
+      AND (agriculture OR plant OR greenhouse OR tomato)
+
+  - id: AG_WS03
+    theme: weakly_supervised_segmentation
+    priority: high
+    query: >
+      ("box-supervised" OR "box supervised") AND "instance segmentation"
+      AND (agriculture OR plant OR fruit)
+
+  # -- SAM / foundation models in agriculture --
+  - id: AG_SAM01
+    theme: foundation_models
+    priority: high
+    query: >
+      "Segment Anything" AND (agriculture OR "plant phenotyping" OR greenhouse OR tomato)
+
+  - id: AG_SAM02
+    theme: foundation_models
+    priority: high
+    query: >
+      "Segment Anything" AND (fruit OR leaf OR crop) AND segmentation
+
+  - id: AG_SAM03
+    theme: foundation_models
+    priority: medium
+    query: >
+      ("SAM" OR "SAM 2") AND "pseudo-label" AND (plant OR agriculture OR fruit)
+
+  # -- Small object detection in agriculture --
+  - id: AG_SOD01
+    theme: small_object_detection
+    priority: high
+    query: >
+      "Slicing Aided Hyper Inference" AND (agriculture OR fruit OR plant OR tomato)
+
+  - id: AG_SOD02
+    theme: small_object_detection
+    priority: high
+    query: >
+      "small object detection" AND (fruit OR tomato OR flower OR bud OR plant)
+
+  - id: AG_SOD03
+    theme: small_object_detection
+    priority: medium
+    query: >
+      "SAHI" AND ("fruit detection" OR "crop detection" OR "plant detection")
+
+  # -- Active learning for annotation in agriculture --
+  - id: AG_AL01
+    theme: active_learning
+    priority: high
+    query: >
+      "active learning" AND (annotation OR labeling)
+      AND (agriculture OR plant OR phenotyping)
+
+  - id: AG_AL02
+    theme: active_learning
+    priority: medium
+    query: >
+      "active learning" AND "instance segmentation" AND (plant OR crop OR agriculture)
+
+  # -- Tomato phenotyping benchmarks --
+  - id: AG_BENCH01
+    theme: phenotyping_benchmarks
+    priority: high
+    query: >
+      tomato AND dataset AND ("instance segmentation" OR "object detection")
+
+  - id: AG_BENCH02
+    theme: phenotyping_benchmarks
+    priority: high
+    query: >
+      tomato AND (benchmark OR dataset) AND (segmentation OR detection OR phenotyping)
+
+  - id: AG_BENCH03
+    theme: phenotyping_benchmarks
+    priority: medium
+    query: >
+      "plant phenotyping" AND (dataset OR benchmark)
+      AND ("instance segmentation" OR "deep learning")
+
+  # =========================================================================
+  # Track B: Transfer-method evidence (domain-agnostic)
+  # =========================================================================
+
+  # -- Weak / semi-supervised segmentation methods --
+  - id: TR_WS01
+    theme: weakly_supervised_segmentation
+    priority: high
+    query: >
+      "box-supervised instance segmentation"
+
+  - id: TR_WS02
+    theme: weakly_supervised_segmentation
+    priority: high
+    query: >
+      ("teacher-student" OR "mean teacher") AND segmentation AND "pseudo-label"
+
+  - id: TR_WS03
+    theme: weakly_supervised_segmentation
+    priority: high
+    query: >
+      "mask auto-labeling" OR "mask auto labeling" OR "box-supervised segmentation"
+
+  # -- SAM for annotation / pseudo-labeling --
+  - id: TR_SAM01
+    theme: foundation_models
+    priority: high
+    query: >
+      "Segment Anything" AND ("pseudo-label" OR "auto-label" OR "mask generation")
+
+  - id: TR_SAM02
+    theme: foundation_models
+    priority: medium
+    query: >
+      "Segment Anything" AND ("instance segmentation" OR annotation) AND "fine-tuning"
+
+  # -- Small object detection methods --
+  - id: TR_SOD01
+    theme: small_object_detection
+    priority: medium
+    query: >
+      "Slicing Aided Hyper Inference" AND ("object detection" OR "small object")
+
+  - id: TR_SOD02
+    theme: small_object_detection
+    priority: medium
+    query: >
+      ("Normalized Wasserstein Distance" OR "NWD") AND "small object detection"
+
+  # -- Active learning for visual tasks --
+  - id: TR_AL01
+    theme: active_learning
+    priority: medium
+    query: >
+      "active learning" AND ("instance segmentation" OR "object detection") AND annotation
+
+# ===========================================================================
+# SEED PAPERS — must appear in at least one provider for recall validation
+# ===========================================================================
+# AG_WS: "Panoptic One-Click Segmentation: Applied to Agricultural Data" (Zimmer 2023, RA-L)
+# AG_WS: "Box-supervised dynamical instance segmentation for in-field cotton" (Li 2023, CEAL)
+# AG_WS: "Weakly supervised learning through box annotations for pig instance segmentation" (Zhou 2025, Sci Rep)
+# AG_SAM: "Enhancing Agricultural Image Segmentation with an Agricultural SAM Adapter" (Li 2023, Sensors)
+# AG_SAM: "Leaf only SAM: A segment anything pipeline for zero-shot automated leaf segmentation" (Williams 2024)
+# AG_SOD: "Slicing aided large scale tomato fruit detection" (Tureckova 2022, Measurement)
+# AG_BENCH: "Determination of tomato leafminer damage using deep learning instance segmentation" (Uygun 2024)
+# TR_WS: "Vision Transformers are Good Mask Auto-Labelers" (Lan 2023, CVPR)
+# TR_SAM: "Segment Anything Model and FCDD for Plant Multi-Disease Detection" (Moupojou 2024, IEEE Access)
