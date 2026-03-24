@@ -14,6 +14,7 @@ test('prompt manager returns clarify intent system and user prompt strings', fun
     $prompts = PromptManager::getPrompts('clarify_intent', [
         'objective' => $objective,
         'theme_context' => $themeContext,
+        'phase' => 'questions',
     ]);
 
     // Assert: output shape is stable and ready for AI agent instructions/user message.
@@ -30,6 +31,7 @@ test('prompt manager defaults existing theme to none when theme context is omitt
     // Act: render prompt data without theme_context.
     $prompts = PromptManager::getPrompts('clarify_intent', [
         'objective' => 'Determine best screening strategy for prediabetes',
+        'phase' => 'questions',
     ]);
 
     // Assert: Blade fallback in clarify_intent_user prompt is applied.

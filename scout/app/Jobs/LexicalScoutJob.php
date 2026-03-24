@@ -2,14 +2,16 @@
 
 namespace App\Jobs;
 
-use App\Ai\PromptManager;
+use App\Ai\Agents\FrameworkExtractor;
+use App\Ai\Agents\TaxonomySummarizer;
 use App\Events\AgentNodeCompleted;
 use App\Events\AgentNodeStarted;
 use App\Models\Thread;
 use App\Services\NexusApiClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Laravel\Ai\Ai;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class LexicalScoutJob implements ShouldQueue
 {
@@ -29,52 +31,56 @@ class LexicalScoutJob implements ShouldQueue
     {
         broadcast(new AgentNodeStarted($this->thread->id, 'lexical_scout'));
 
-        $stateData = $this->thread->state_data ?? [];
-        $protocol = $stateData['protocol_draft'] ?? [];
+        try {
+            $stateData = $this->thread->state_data ?? [];
 
-        // --- Phase 1: PICO Extraction ---
-        $picoPrompts = PromptManager::getPrompts('extract_pico', [
-            'objective' => $this->thread->objective,
-            'scope' => $protocol['scope']['definition'] ?? '',
-            'inclusion' => collect($protocol['inclusion'] ?? [])->pluck('criterion')->implode(', '),
-        ]);
+            // --- Phase 1: Framework Extraction ---
+            $picoAgent = new FrameworkExtractor($this->thread);
+            $picoResponse = $picoAgent->forUser($this->thread->user)
+                ->prompt($picoAgent->getUserPrompt(), timeout: 120);
 
-        $picoResponse = \Laravel\Ai\agent($picoPrompts['system'])
-            ->prompt($picoPrompts['user'], timeout: 120);
+            $picoData = $picoResponse->toArray();
+            $stateData['pico_framework'] = $picoData ?? [];
 
-        $picoText = $picoResponse->text;
-        if (preg_match('/```(?:json)?\s*(.*?)\s*```/is', $picoText, $matches)) {
-            $picoText = $matches[1];
+            $this->thread->recordAgentInteraction(
+                agentName: 'framework_extractor',
+                conversationId: $picoResponse->conversationId,
+                input: $picoAgent->getUserPrompt(),
+                output: $picoData
+            );
+
+            // --- Phase 2: Nexus API Fetching ---
+            $nexusClient = app(NexusApiClient::class);
+            $papers = $nexusClient->searchLiterature($stateData['pico_framework'], ['limit' => 15]);
+
+            // --- Phase 3: Taxonomy Summarization ---
+            $taxAgent = new TaxonomySummarizer($this->thread, $papers);
+            $taxResponse = $taxAgent->forUser($this->thread->user)
+                ->prompt($taxAgent->getUserPrompt(), timeout: 120);
+
+            $taxData = $taxResponse->toArray();
+            $stateData['expanded_taxonomy'] = $taxData['expanded_taxonomy'] ?? [];
+
+            $this->thread->recordAgentInteraction(
+                agentName: 'taxonomy_summarizer',
+                conversationId: $taxResponse->conversationId,
+                input: $taxAgent->getUserPrompt(),
+                output: $taxData
+            );
+
+            $this->thread->update(['state_data' => $stateData]);
+
+            broadcast(new AgentNodeCompleted($this->thread->id, 'lexical_scout', [
+                'pico' => $stateData['pico_framework'],
+                'taxonomy' => $stateData['expanded_taxonomy'],
+            ]));
+
+            \App\Services\WorkflowOrchestrator::dispatchNext($this->thread, 'lexical_scout');
+        } catch (Throwable $e) {
+            Log::error('LexicalScoutJob failed.', [
+                'thread_id' => $this->thread->id,
+                'exception' => $e->getMessage(),
+            ]);
         }
-        $picoData = json_decode($picoText, true);
-        $stateData['pico_framework'] = $picoData ?? [];
-
-        // --- Phase 2: Nexus API Fetching (OpenAlex & Semantic Scholar) ---
-        $nexusClient = app(NexusApiClient::class);
-        $papers = $nexusClient->searchLiterature($stateData['pico_framework'], ['limit' => 15]);
-
-        // --- Phase 3: Taxonomy Summarization ---
-        $taxPrompts = PromptManager::getPrompts('summarize_taxonomy', [
-            'papers' => $papers,
-        ]);
-
-        $taxResponse = \Laravel\Ai\agent($taxPrompts['system'])
-            ->prompt($taxPrompts['user'], timeout: 120);
-
-        $taxText = $taxResponse->text;
-        if (preg_match('/```(?:json)?\s*(.*?)\s*```/is', $taxText, $matches)) {
-            $taxText = $matches[1];
-        }
-        $taxData = json_decode($taxText, true);
-        $stateData['expanded_taxonomy'] = $taxData['expanded_taxonomy'] ?? [];
-
-        $this->thread->update(['state_data' => $stateData]);
-
-        broadcast(new AgentNodeCompleted($this->thread->id, 'lexical_scout', [
-            'pico' => $stateData['pico_framework'],
-            'taxonomy' => $stateData['expanded_taxonomy'],
-        ]));
-
-        dispatch(new GenerateQueriesJob($this->thread));
     }
 }

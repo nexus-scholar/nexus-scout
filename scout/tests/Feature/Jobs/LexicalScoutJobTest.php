@@ -25,7 +25,9 @@ test('lexical scout job stores pico and taxonomy, broadcasts events, and dispatc
     // Arrange: create a thread with a protocol draft that lexical_scout consumes.
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess SSRI efficacy in adolescents with ME/CFS',
         'theme_context' => 'Pediatric chronic fatigue',
         'state_data' => [
@@ -153,7 +155,9 @@ JSON;
 test('lexical scout job tolerates invalid ai output and still advances pipeline', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate CBT outcomes in treatment-resistant insomnia',
         'theme_context' => 'Sleep medicine',
         'state_data' => [
@@ -224,7 +228,9 @@ test('lexical scout job tolerates invalid ai output and still advances pipeline'
 test('lexical scout live-like flow keeps loop state stable and persists outputs', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate CBT-I versus pharmacotherapy in chronic insomnia',
         'theme_context' => 'Sleep medicine',
         'status' => 'running',
@@ -290,7 +296,7 @@ test('lexical scout live-like flow keeps loop state stable and persists outputs'
 
     $thread->refresh();
 
-    expect($thread->status)->toBe('running');
+    expect($thread->status)->toBe(\App\Enums\ThreadStatus::Running);
     expect($thread->state_data['loop_count'] ?? null)->toBe(2);
     expect($thread->state_data['pico_framework']['comparison'] ?? null)->toBe('Pharmacotherapy');
     expect($thread->state_data['expanded_taxonomy']['CBT-I'][0] ?? null)

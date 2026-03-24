@@ -19,7 +19,9 @@ uses(RefreshDatabase::class);
 test('generate export node job creates export payloads and finishes workflow', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess CBT outcomes in chronic insomnia',
         'theme_context' => 'Sleep medicine',
         'state_data' => [
@@ -48,7 +50,7 @@ test('generate export node job creates export payloads and finishes workflow', f
 
     $thread->refresh();
 
-    expect($thread->status)->toBe('completed');
+    expect($thread->status)->toBe(\App\Enums\ThreadStatus::Completed);
     expect($thread->nexus_yaml)->toContain('project:');
     expect($thread->nexus_yaml)->toContain((string) $thread->id);
     expect($thread->nexus_yaml)->toContain($thread->objective);
@@ -83,7 +85,9 @@ test('generate export node job creates export payloads and finishes workflow', f
 test('generate export node job completes when boolean strings are missing', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate metformin efficacy in PCOS',
         'theme_context' => 'Endocrinology',
         'state_data' => [
@@ -101,7 +105,7 @@ test('generate export node job completes when boolean strings are missing', func
 
     $thread->refresh();
 
-    expect($thread->status)->toBe('completed');
+    expect($thread->status)->toBe(\App\Enums\ThreadStatus::Completed);
     expect($thread->nexus_yaml)->toContain('boolean_string');
     expect($thread->protocol['queries_yml'] ?? null)->toContain('queries:');
 

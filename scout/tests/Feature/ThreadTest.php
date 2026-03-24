@@ -36,6 +36,7 @@ test('authenticated user can create a project', function () {
         ->post(route('projects.store'), [
             'objective' => 'Research SSRIs on CFS',
             'theme_context' => 'Clinical',
+            'template_type' => 'slr',
         ]);
 
     $response->assertStatus(302);
@@ -59,6 +60,7 @@ test('creating a project dispatches clarify intent job with the created thread',
         ->post(route('projects.store'), [
             'objective' => 'Identify first-line treatment outcomes for generalized anxiety disorder',
             'theme_context' => 'Psychiatry',
+            'template_type' => 'slr',
         ]);
 
     $thread = Thread::query()->latest('created_at')->first();

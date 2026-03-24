@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ThreadStatus;
 use App\Jobs\ClarifyIntentJob;
-use App\Jobs\DraftProtocolParametersJob;
+use App\Jobs\RefineIntentJob;
+use App\Jobs\RunSearchNodeJob;
 use App\Models\Thread;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,7 +20,7 @@ class ThreadController extends Controller
     public function index(): Response
     {
         return Inertia::render('projects/index', [
-            'threads' => auth()->user()->threads()->latest()->get(),
+            'projects' => auth()->user()->projects()->with('threads')->latest()->get(),
         ]);
     }
 
@@ -38,9 +40,19 @@ class ThreadController extends Controller
         $validated = $request->validate([
             'objective' => 'required|string',
             'theme_context' => 'nullable|string',
+            'template_type' => ['required', 'string', \Illuminate\Validation\Rule::enum(\App\Enums\TemplateType::class)],
         ]);
 
-        $thread = auth()->user()->threads()->create($validated);
+        $project = auth()->user()->projects()->create([
+            'name' => 'Project: ' . str($validated['objective'])->limit(30),
+            'description' => $validated['objective'],
+        ]);
+
+        $thread = $project->threads()->create([
+            'objective' => $validated['objective'],
+            'theme_context' => $validated['theme_context'],
+            'template_type' => \App\Enums\TemplateType::from($validated['template_type']),
+        ]);
 
         dispatch(new ClarifyIntentJob($thread));
 
@@ -66,13 +78,23 @@ class ThreadController extends Controller
             'answers' => 'required|array',
         ]);
 
+        // Basic sanity check: answers should match question IDs
+        $questionIds = collect($thread->questions)->pluck('id')->toArray();
+        foreach (array_keys($validated['answers']) as $answerId) {
+            if (! in_array($answerId, $questionIds)) {
+                return back()->withErrors(['answers' => "Invalid question ID: {$answerId}"]);
+            }
+        }
+
         $thread->update([
-            'answers' => $validated['answers'],
-            'status' => 'running',
-            'state_data' => ['loop_count' => 0], // Initialize state
+            'status' => ThreadStatus::Running,
+            'state_data' => array_merge($thread->state_data ?? [], [
+                'loop_count' => 0,
+                'answers' => $validated['answers'],
+            ]),
         ]);
 
-        dispatch(new DraftProtocolParametersJob($thread));
+        dispatch(new RefineIntentJob($thread));
 
         return redirect()->route('projects.engine', $thread);
     }
@@ -102,9 +124,9 @@ class ThreadController extends Controller
      */
     public function execute(Thread $thread): RedirectResponse
     {
-        $thread->update(['status' => 'executing']);
+        $thread->update(['status' => ThreadStatus::Executing]);
 
-        dispatch(new \App\Jobs\RunSearchNodeJob($thread));
+        dispatch(new RunSearchNodeJob($thread));
 
         return redirect()->route('projects.index')->with('success', 'System is running extraction, you will be emailed when your CSV is ready');
     }

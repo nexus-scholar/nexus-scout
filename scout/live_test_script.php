@@ -1,13 +1,13 @@
 <?php
 
-use App\Models\User;
-use App\Models\Thread;
-use App\Jobs\DraftProtocolParametersJob;
 use App\Jobs\DiagnosticCritiqueJob;
-use App\Jobs\LexicalScoutJob;
-use App\Jobs\GenerateQueriesJob;
-use App\Jobs\ValidateProtocolJob;
+use App\Jobs\DraftProtocolParametersJob;
 use App\Jobs\GenerateExportNodeJob;
+use App\Jobs\GenerateQueriesJob;
+use App\Jobs\LexicalScoutJob;
+use App\Jobs\ValidateProtocolJob;
+use App\Models\Thread;
+use App\Models\User;
 use App\Services\NexusApiClient;
 
 error_reporting(E_ALL);
@@ -120,7 +120,9 @@ echo 'Nexus token configured: '.(config('services.nexus_api.token') ? 'yes' : 'n
 $debugNexusClient = new class extends NexusApiClient
 {
     public array $lastPico = [];
+
     public array $lastOptions = [];
+
     public array $lastPapers = [];
 
     public function searchLiterature(array $pico, array $options = []): array
@@ -157,7 +159,7 @@ $user = User::first() ?? User::factory()->create([
     'password' => bcrypt('password'),
 ]);
 
-echo "User ID: " . $user->id . "\n";
+echo 'User ID: '.$user->id."\n";
 
 // 2. Create Thread
 hr('SETUP: THREAD');
@@ -172,10 +174,10 @@ $thread = $user->threads()->create([
     ],
     'state_data' => [
         'loop_count' => 0,
-    ]
+    ],
 ]);
 
-echo "Thread ID: " . $thread->id . "\n";
+echo 'Thread ID: '.$thread->id."\n";
 summarizeThread($thread);
 
 // 3. Chain the jobs synchronously for the live test

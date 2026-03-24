@@ -10,11 +10,20 @@ interface Thread {
     objective: string;
     theme_context: string;
     status: string;
+    template_type: string;
     created_at: string;
 }
 
-interface Props {
+interface Project {
+    id: string;
+    name: string;
+    description: string;
+    created_at: string;
     threads: Thread[];
+}
+
+interface Props {
+    projects: Project[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -24,7 +33,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function ProjectsIndex({ threads }: Props) {
+export default function ProjectsIndex({ projects }: Props) {
     const getThreadUrl = (thread: Thread) => {
         switch (thread.status) {
             case 'running':
@@ -58,7 +67,7 @@ export default function ProjectsIndex({ threads }: Props) {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {threads.length === 0 ? (
+                    {projects.length === 0 ? (
                         <div className="col-span-full flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
                             <Folder className="mb-4 h-12 w-12 text-muted-foreground/50" />
                             <h3 className="text-lg font-medium">No projects yet</h3>
@@ -68,29 +77,44 @@ export default function ProjectsIndex({ threads }: Props) {
                             </Button>
                         </div>
                     ) : (
-                        threads.map((thread) => (
-                            <Link
-                                key={thread.id}
-                                href={getThreadUrl(thread)}
-                                className="group flex flex-col justify-between rounded-lg border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-md"
-                            >
-                                <div>
-                                    <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary capitalize">
-                                            {thread.status.replace('_', ' ')}
-                                        </span>
-                                        <span className="text-xs text-muted-foreground">
-                                            {new Date(thread.created_at).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                    <h3 className="font-semibold leading-tight group-hover:text-primary transition-colors">
-                                        {thread.objective.length > 60 ? thread.objective.substring(0, 60) + '...' : thread.objective}
+                        projects.map((project) => (
+                            <div key={project.id} className="flex flex-col rounded-lg border bg-card p-4">
+                                <div className="mb-4">
+                                    <h3 className="font-semibold text-lg leading-tight">
+                                        {project.name}
                                     </h3>
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                        {thread.theme_context || 'General Context'}
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Created on {new Date(project.created_at).toLocaleDateString()}
                                     </p>
                                 </div>
-                            </Link>
+                                
+                                <div className="flex flex-col gap-2 mt-auto">
+                                    <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Workflow Runs</h4>
+                                    {project.threads.length > 0 ? (
+                                        project.threads.map(thread => (
+                                            <Link
+                                                key={thread.id}
+                                                href={getThreadUrl(thread)}
+                                                className="group flex flex-col rounded border bg-background p-2.5 transition-all hover:border-primary/50"
+                                            >
+                                                <div className="flex items-center justify-between gap-2 mb-1">
+                                                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary capitalize">
+                                                        {thread.status.replace('_', ' ')}
+                                                    </span>
+                                                    <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase">
+                                                        {thread.template_type}
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                                    {thread.objective}
+                                                </p>
+                                            </Link>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground italic">No workflow runs yet.</p>
+                                    )}
+                                </div>
+                            </div>
                         ))
                     )}
                 </div>

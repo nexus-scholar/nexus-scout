@@ -49,7 +49,7 @@ class ClarifyIntentOutputValidator
                     if (! is_array($options) || count($options) < 2) {
                         $validator->errors()->add("questions.{$index}.options", 'Options are required and must contain at least 2 values for choice questions.');
                     }
-                } elseif (array_key_exists('options', $question)) {
+                } elseif (! empty($question['options'])) {
                     $validator->errors()->add("questions.{$index}.options", 'Options are only allowed for multiple_choice and multi_select questions.');
                 }
 
@@ -65,7 +65,7 @@ class ClarifyIntentOutputValidator
                     if (! is_int($min) || ! is_int($max) || $min >= $max) {
                         $validator->errors()->add("questions.{$index}.scale_range", 'Scale range must contain two integers where min is less than max.');
                     }
-                } elseif (array_key_exists('scale_range', $question)) {
+                } elseif (! empty($question['scale_range'])) {
                     $validator->errors()->add("questions.{$index}.scale_range", 'Scale range is only allowed for scale questions.');
                 }
             }

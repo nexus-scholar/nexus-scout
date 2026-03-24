@@ -34,12 +34,12 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the threads for the user.
+     * Get the projects for the user.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Thread>
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Project>
      */
-    public function threads(): HasMany
+    public function projects(): HasMany
     {
-        return $this->hasMany(Thread::class);
+        return $this->hasMany(Project::class);
     }
 }

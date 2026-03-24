@@ -18,7 +18,9 @@ uses(RefreshDatabase::class);
 test('run search node job emits lifecycle events and completion status', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess SSRI outcomes in pediatric CFS',
         'theme_context' => 'Child psychiatry',
         'status' => 'executing',
@@ -38,7 +40,7 @@ test('run search node job emits lifecycle events and completion status', functio
 
     $thread->refresh();
 
-    expect($thread->status)->toBe('executing');
+    expect($thread->status)->toBe(\App\Enums\ThreadStatus::Executing);
 
     Event::assertDispatched(AgentNodeStarted::class, function (AgentNodeStarted $event) use ($thread): bool {
         return $event->threadId === $thread->id && $event->node === 'run_search';

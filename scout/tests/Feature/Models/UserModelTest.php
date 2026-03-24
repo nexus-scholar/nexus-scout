@@ -32,15 +32,17 @@ test('user has many threads and password is hashed on create', function () {
         'password' => 'plain-password',
     ]);
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess melatonin efficacy for delayed sleep phase disorder',
         'theme_context' => 'Circadian rhythm disorders',
     ]);
 
     $user->refresh();
 
-    expect($user->threads)->toHaveCount(1);
-    expect($user->threads->first()?->is($thread))->toBeTrue();
+    expect($user->projects->first()->threads)->toHaveCount(1);
+    expect($user->projects->first()->threads->first()?->is($thread))->toBeTrue();
     expect(password_verify('plain-password', $user->password))->toBeTrue();
     expect($user->password)->not->toBe('plain-password');
 });

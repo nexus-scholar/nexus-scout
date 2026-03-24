@@ -2,20 +2,39 @@
 
 namespace App\Jobs;
 
+use App\Ai\Agents\IntentClarifier;
 use App\Ai\ClarifyIntentOutputValidator;
-use App\Ai\PromptManager;
+use App\Enums\ThreadStatus;
+use App\Events\AgentFailed;
 use App\Events\AgentNodeCompleted;
 use App\Events\AgentNodeStarted;
 use App\Models\Thread;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
-use JsonException;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Laravel\Ai\Exceptions\AiException;
+use Laravel\Ai\Exceptions\FailoverableException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
+use Throwable;
 
 class ClarifyIntentJob implements ShouldQueue
 {
     use Queueable;
+
+    /**
+     * The number of times the job may be attempted.
+     */
+    public int $tries = 3;
+
+    /**
+     * The number of seconds to wait before retrying the job.
+     *
+     * @var int[]
+     */
+    public array $backoff = [10, 30, 60];
 
     /**
      * Create a new job instance.
@@ -31,41 +50,66 @@ class ClarifyIntentJob implements ShouldQueue
     {
         broadcast(new AgentNodeStarted($this->thread->id, 'clarify_intent'));
 
-        $prompts = PromptManager::getPrompts('clarify_intent', [
-            'objective' => $this->thread->objective,
-            'theme_context' => $this->thread->theme_context,
+        try {
+            $agent = new IntentClarifier($this->thread, IntentClarifier::PHASE_QUESTIONS);
+            $response = $agent->forUser($this->thread->user)
+                ->prompt($agent->getUserPrompt(), timeout: 120);
+
+            $validated = app(ClarifyIntentOutputValidator::class)->validate($response->toArray());
+
+            // Persist structured data
+            $this->persistValidatedData($validated);
+
+            // Record interaction metadata
+            $this->thread->recordAgentInteraction(
+                agentName: 'intent_clarifier_questions',
+                conversationId: $response->conversationId,
+                input: $agent->getUserPrompt(),
+                output: $validated
+            );
+
+            broadcast(new AgentNodeCompleted($this->thread->id, 'clarify_intent', [
+                'questions' => $this->thread->questions,
+                'theme_context' => $this->thread->theme_context,
+            ]));
+        } catch (ValidationException $e) {
+            $this->handlePermanentFailure('Validation failed for AI output.', $e);
+        } catch (RateLimitedException|ProviderOverloadedException|FailoverableException $e) {
+            throw $e; // Trigger retry
+        } catch (AiException $e) {
+            $this->handlePermanentFailure('AI provider error.', $e);
+        } catch (Throwable $e) {
+            $this->handlePermanentFailure('Unexpected error during intent clarification.', $e);
+        }
+    }
+
+    /**
+     * Handle a permanent failure that should not be retried.
+     */
+    protected function handlePermanentFailure(string $reason, Throwable $e): void
+    {
+        Log::error($reason, [
+            'thread_id' => $this->thread->id,
+            'exception' => $e->getMessage(),
         ]);
 
-        $response = \Laravel\Ai\agent($prompts['system'])
-            ->prompt($prompts['user'], timeout: 120);
+        broadcast(new AgentFailed($this->thread, $reason));
 
-        try {
-            $data = $this->decodeAiPayload($response->text);
-
-            if ($data !== null) {
-                $validated = app(ClarifyIntentOutputValidator::class)->validate($data);
-
-                $this->persistValidatedData($validated);
-            }
-        } catch (JsonException|ValidationException) {
-            // Invalid or malformed model output is ignored to keep thread state unchanged.
-        }
-
+        // Still broadcast completion to stop UI loaders, but with current state.
         broadcast(new AgentNodeCompleted($this->thread->id, 'clarify_intent', [
             'questions' => $this->thread->questions,
             'theme_context' => $this->thread->theme_context,
         ]));
     }
 
-    protected function decodeAiPayload(string $text): ?array
+    /**
+     * Handle a job failure.
+     */
+    public function failed(Throwable $exception): void
     {
-        if (preg_match('/```(?:json)?\s*(.*?)\s*```/is', $text, $matches)) {
-            $text = $matches[1];
+        if ($this->thread->exists) {
+            broadcast(new AgentFailed($this->thread, 'Job failed after maximum attempts.'));
         }
-
-        $decoded = json_decode($text, true, 512, JSON_THROW_ON_ERROR);
-
-        return is_array($decoded) ? $decoded : null;
     }
 
     protected function persistValidatedData(array $validated): void
@@ -78,9 +122,8 @@ class ClarifyIntentJob implements ShouldQueue
     protected function applyValidatedData(array $validated): void
     {
         $this->thread->update([
-            'questions' => $validated['questions'],
             'theme_context' => $validated['theme_context'],
-            'status' => 'interviewing',
+            'status' => ThreadStatus::Interviewing,
         ]);
     }
 }

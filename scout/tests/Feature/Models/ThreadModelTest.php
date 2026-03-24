@@ -12,15 +12,15 @@ test('threads table contains required columns', function () {
 
     expect(Schema::hasColumns('threads', [
         'id',
-        'user_id',
+        'project_id',
+        'template_type',
         'objective',
         'theme_context',
         'status',
-        'questions',
-        'answers',
-        'nexus_yaml',
         'protocol',
         'state_data',
+        'export_yaml',
+        'agent_interactions',
         'created_at',
         'updated_at',
     ]))->toBeTrue();
@@ -32,20 +32,18 @@ test('threads table contains required columns', function () {
 test('thread belongs to user and casts json attributes to arrays', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate CBT outcomes in chronic insomnia',
         'theme_context' => 'Sleep medicine',
-        'questions' => [['id' => 'q1', 'text' => 'What population?']],
-        'answers' => ['q1' => 'Adults'],
         'protocol' => ['scope' => ['definition' => 'Adult insomnia trials']],
         'state_data' => ['loop_count' => 1],
     ]);
 
     $thread->refresh();
 
-    expect($thread->user->is($user))->toBeTrue();
-    expect($thread->questions)->toBeArray();
-    expect($thread->answers)->toBeArray();
+    expect($thread->project->user->is($user))->toBeTrue();
     expect($thread->protocol)->toBeArray();
     expect($thread->state_data)->toBeArray();
     expect($thread->state_data['loop_count'])->toBe(1);
@@ -60,5 +58,5 @@ test('thread model exposes expected fillable attributes', function () {
     expect($thread->isFillable('objective'))->toBeTrue();
     expect($thread->isFillable('theme_context'))->toBeTrue();
     expect($thread->isFillable('state_data'))->toBeTrue();
-    expect($thread->isFillable('user_id'))->toBeFalse();
+    expect($thread->isFillable('project_id'))->toBeTrue();
 });

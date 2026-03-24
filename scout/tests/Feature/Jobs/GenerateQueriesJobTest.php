@@ -24,7 +24,9 @@ test('generate queries job stores themes and boolean strings, broadcasts events,
     // Arrange: prepare a thread with protocol and taxonomy context used by the prompt.
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess CBT outcomes in insomnia',
         'theme_context' => 'Sleep medicine',
         'state_data' => [
@@ -134,7 +136,9 @@ JSON,
 test('generate queries job ignores invalid output and still dispatches validate protocol', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess pharmacologic interventions in chronic insomnia',
         'theme_context' => 'Sleep pharmacotherapy',
         'state_data' => [

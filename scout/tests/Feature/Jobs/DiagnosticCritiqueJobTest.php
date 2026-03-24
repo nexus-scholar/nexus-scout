@@ -23,7 +23,9 @@ uses(RefreshDatabase::class);
 test('diagnostic critique job rebuilds queries and dispatches validate protocol', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess SSRI outcomes in adolescent depression',
         'theme_context' => 'Child psychiatry',
         'state_data' => [
@@ -108,7 +110,9 @@ JSON,
 test('diagnostic critique job tolerates invalid ai output and still advances pipeline', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess CBT outcomes in resistant insomnia',
         'theme_context' => 'Sleep medicine',
         'state_data' => [

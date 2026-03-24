@@ -23,7 +23,9 @@ test('draft protocol job stores protocol draft, broadcasts events, and dispatche
     // Arrange: create a thread with prior state to verify merge behavior.
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate CBT efficacy for chronic insomnia',
         'theme_context' => 'Behavioral sleep medicine',
         'answers' => [
@@ -111,7 +113,9 @@ JSON,
 test('draft protocol job ignores invalid ai output and still dispatches next job', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess metformin effects in adolescents with PCOS',
         'theme_context' => 'Endocrinology',
         'answers' => [

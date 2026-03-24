@@ -23,6 +23,7 @@ export default function CreateProject() {
     const { data, setData, post, processing, errors } = useForm({
         objective: '',
         theme_context: '',
+        template_type: 'slr',
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -59,16 +60,34 @@ export default function CreateProject() {
                             {errors.objective && <p className="text-sm font-medium text-destructive">{errors.objective}</p>}
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="theme_context" className="text-base">Theme Context (Optional)</Label>
-                            <Input
-                                id="theme_context"
-                                placeholder="e.g., Clinical Psychiatry, Engineering, General..."
-                                className="text-lg"
-                                value={data.theme_context}
-                                onChange={(e) => setData('theme_context', e.target.value)}
-                            />
-                            {errors.theme_context && <p className="text-sm font-medium text-destructive">{errors.theme_context}</p>}
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="theme_context" className="text-base">Theme Context (Optional)</Label>
+                                <Input
+                                    id="theme_context"
+                                    placeholder="e.g., Clinical Psychiatry..."
+                                    className="text-lg"
+                                    value={data.theme_context}
+                                    onChange={(e) => setData('theme_context', e.target.value)}
+                                />
+                                {errors.theme_context && <p className="text-sm font-medium text-destructive">{errors.theme_context}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="template_type" className="text-base">Review Methodology</Label>
+                                <select
+                                    id="template_type"
+                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-lg"
+                                    value={data.template_type}
+                                    onChange={(e) => setData('template_type', e.target.value)}
+                                >
+                                    <option value="slr">Systematic Literature Review (SLR)</option>
+                                    <option value="scoping">Scoping Review</option>
+                                    <option value="rapid">Rapid Review</option>
+                                    <option value="related_works">Related Works Discovery</option>
+                                </select>
+                                {errors.template_type && <p className="text-sm font-medium text-destructive">{errors.template_type}</p>}
+                            </div>
                         </div>
                     </div>
 

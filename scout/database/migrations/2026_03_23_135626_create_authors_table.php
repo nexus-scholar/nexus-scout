@@ -11,8 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('threads', function (Blueprint $table) {
-            $table->text('export_yaml')->after('protocol')->nullable();
+        Schema::create('authors', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->string('family_name')->index();
+            $table->string('given_name')->nullable();
+            $table->string('orcid')->unique()->index()->nullable();
+            $table->timestamps();
         });
     }
 
@@ -21,8 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('threads', function (Blueprint $table) {
-            $table->dropColumn('export_yaml');
-        });
+        Schema::dropIfExists('authors');
     }
 };

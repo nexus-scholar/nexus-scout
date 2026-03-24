@@ -2,13 +2,14 @@
 
 namespace App\Jobs;
 
-use App\Ai\PromptManager;
+use App\Ai\Agents\QueryGenerator;
 use App\Events\AgentNodeCompleted;
 use App\Events\AgentNodeStarted;
 use App\Models\Thread;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Laravel\Ai\Ai;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class GenerateQueriesJob implements ShouldQueue
 {
@@ -28,43 +29,45 @@ class GenerateQueriesJob implements ShouldQueue
     {
         broadcast(new AgentNodeStarted($this->thread->id, 'generate_queries'));
 
-        $stateData = $this->thread->state_data ?? [];
-        $protocol = $stateData['protocol_draft'] ?? [];
+        try {
+            $agent = new QueryGenerator($this->thread);
+            $response = $agent->forUser($this->thread->user)
+                ->prompt($agent->getUserPrompt(), timeout: 120);
 
-        $prompts = PromptManager::getPrompts('generate_queries', [
-            'scope' => $protocol['scope']['definition'] ?? '',
-            'inclusion' => collect($protocol['inclusion'] ?? [])->pluck('criterion')->implode(', '),
-            'exclusion' => collect($protocol['exclusion'] ?? [])->pluck('criterion')->implode(', '),
-            'taxonomy' => $stateData['expanded_taxonomy'] ?? [],
-            'critique' => $stateData['critique'] ?? null,
-        ]);
+            $data = $response->toArray();
 
-        $response = \Laravel\Ai\agent($prompts['system'])
-            ->prompt($prompts['user'], timeout: 120);
+            if ($data) {
+                $stateData = $this->thread->state_data ?? [];
+                $stateData['query_themes'] = $data['themes'] ?? [];
 
-        $text = $response->text;
-        if (preg_match('/```(?:json)?\s*(.*?)\s*```/is', $text, $matches)) {
-            $text = $matches[1];
+                // Extract a flat list of boolean strings for the legacy nexus_yaml logic if needed
+                $flatQueries = collect($data['themes'] ?? [])
+                    ->flatMap(fn ($theme) => collect($theme['queries'] ?? [])->pluck('query_string'))
+                    ->toArray();
+
+                $stateData['boolean_strings'] = $flatQueries;
+
+                $this->thread->update(['state_data' => $stateData]);
+
+                // Record interaction metadata
+                $this->thread->recordAgentInteraction(
+                    agentName: 'query_generator',
+                    conversationId: $response->conversationId,
+                    input: $agent->getUserPrompt(),
+                    output: $data
+                );
+            }
+
+            broadcast(new AgentNodeCompleted($this->thread->id, 'generate_queries', [
+                'themes' => $stateData['query_themes'] ?? [],
+            ]));
+
+            \App\Services\WorkflowOrchestrator::dispatchNext($this->thread, 'generate_queries');
+        } catch (Throwable $e) {
+            Log::error('GenerateQueriesJob failed.', [
+                'thread_id' => $this->thread->id,
+                'exception' => $e->getMessage(),
+            ]);
         }
-        $data = json_decode($text, true);
-
-        if ($data) {
-            $stateData['query_themes'] = $data['themes'] ?? [];
-            
-            // Extract a flat list of boolean strings for the legacy nexus_yaml logic if needed
-            $flatQueries = collect($data['themes'] ?? [])
-                ->flatMap(fn($theme) => collect($theme['queries'] ?? [])->pluck('query_string'))
-                ->toArray();
-            
-            $stateData['boolean_strings'] = $flatQueries;
-            
-            $this->thread->update(['state_data' => $stateData]);
-        }
-
-        broadcast(new AgentNodeCompleted($this->thread->id, 'generate_queries', [
-            'themes' => $stateData['query_themes'] ?? []
-        ]));
-
-        dispatch(new ValidateProtocolJob($this->thread));
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+use App\Ai\Agents\IntentClarifier;
+use App\Enums\ThreadStatus;
 use App\Events\AgentNodeCompleted;
 use App\Events\AgentNodeStarted;
 use App\Jobs\ClarifyIntentJob;
@@ -7,7 +9,6 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Ai;
-use Laravel\Ai\AnonymousAgent;
 
 uses(RefreshDatabase::class);
 
@@ -21,7 +22,9 @@ test('clarify intent job updates thread and broadcasts node lifecycle events', f
     // Arrange: create a realistic thread input that the job will enrich.
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Find evidence for CBT effectiveness in insomnia',
         'theme_context' => 'Sleep disorders',
     ]);
@@ -33,29 +36,28 @@ test('clarify intent job updates thread and broadcasts node lifecycle events', f
     ]);
 
     // Mock the AI response as fenced JSON to validate parsing and extraction logic.
-    Ai::fakeAgent(AnonymousAgent::class, [
-        <<<'JSON'
-```json
-{
-  "questions": [
-        {
-            "id": "q1",
-            "type": "multiple_choice",
-            "text": "What study design should be prioritized?",
-            "options": ["RCT", "Observational"],
-            "rationale": "Design selection affects evidence quality thresholds."
-        },
-        {
-            "id": "q2",
-            "type": "boolean",
-            "text": "Should we limit to adults only?",
-            "rationale": "Age limits change cohort comparability."
-        }
-  ],
-  "theme_context": "Behavioral sleep medicine"
-}
-```
-JSON,
+    Ai::fakeAgent(IntentClarifier::class, [
+        [
+            'questions' => [
+                [
+                    'id' => 'q1',
+                    'type' => 'multiple_choice',
+                    'text' => 'What study design should be prioritized?',
+                    'options' => ['RCT', 'Observational'],
+                    'scale_range' => null,
+                    'rationale' => 'Design selection affects evidence quality thresholds.',
+                ],
+                [
+                    'id' => 'q2',
+                    'type' => 'boolean',
+                    'text' => 'Should we limit to adults only?',
+                    'options' => null,
+                    'scale_range' => null,
+                    'rationale' => 'Age limits change cohort comparability.',
+                ],
+            ],
+            'theme_context' => 'Behavioral sleep medicine',
+        ],
     ])->preventStrayPrompts();
 
     // Act: execute the job synchronously and reload persisted state from the database.
@@ -75,7 +77,7 @@ JSON,
     expect($thread->questions[1]['text'])->toBe('Should we limit to adults only?');
     expect($thread->questions[1]['rationale'])->toBe('Age limits change cohort comparability.');
     expect($thread->theme_context)->toBe('Behavioral sleep medicine');
-    expect($thread->status)->toBe('interviewing');
+    expect($thread->status)->toBe(ThreadStatus::Interviewing);
 
     // Assert: the start event identifies the thread and correct agent node name.
     Event::assertDispatched(AgentNodeStarted::class, function (AgentNodeStarted $event) use ($thread): bool {
@@ -101,7 +103,9 @@ test('clarify intent job keeps thread unchanged when ai output is not valid json
     // Arrange: start with known persisted values that must remain intact.
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate metformin effects in PCOS',
         'theme_context' => 'Endocrinology',
     ]);
@@ -112,7 +116,7 @@ test('clarify intent job keeps thread unchanged when ai output is not valid json
     ]);
 
     // Provide plain text that cannot be decoded as JSON.
-    Ai::fakeAgent(AnonymousAgent::class, [
+    Ai::fakeAgent(IntentClarifier::class, [
         'I could not determine clarifying questions at this time.',
     ])->preventStrayPrompts();
 
@@ -124,7 +128,7 @@ test('clarify intent job keeps thread unchanged when ai output is not valid json
     // Assert: no thread fields were mutated by the failed parsing step.
     expect($thread->questions)->toBeNull();
     expect($thread->theme_context)->toBe('Endocrinology');
-    expect($thread->status)->toBe('clarification_pending');
+    expect($thread->status)->toBe(ThreadStatus::ClarificationPending);
 
     // Assert: start event is still emitted so clients can show progress.
     Event::assertDispatched(AgentNodeStarted::class, function (AgentNodeStarted $event) use ($thread): bool {
@@ -148,13 +152,15 @@ test('clarify intent job keeps thread unchanged when ai output is not valid json
 test('clarify intent job keeps thread unchanged when ai json fails schema validation', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate SGLT2 inhibitors in heart failure',
         'theme_context' => 'Cardiology',
     ]);
 
-    Ai::fakeAgent(AnonymousAgent::class, [
-        json_encode([
+    Ai::fakeAgent(IntentClarifier::class, [
+        [
             'theme_context' => 'Cardiology outcomes',
             'questions' => [
                 [
@@ -164,7 +170,7 @@ test('clarify intent job keeps thread unchanged when ai json fails schema valida
                     'rationale' => 'Population definition changes effect estimates.',
                 ],
             ],
-        ], JSON_THROW_ON_ERROR),
+        ],
     ])->preventStrayPrompts();
 
     (new ClarifyIntentJob($thread))->handle();
@@ -173,7 +179,7 @@ test('clarify intent job keeps thread unchanged when ai json fails schema valida
 
     expect($thread->questions)->toBeNull();
     expect($thread->theme_context)->toBe('Cardiology');
-    expect($thread->status)->toBe('clarification_pending');
+    expect($thread->status)->toBe(ThreadStatus::ClarificationPending);
 });
 
 /**
@@ -185,7 +191,9 @@ test('clarify intent job keeps thread unchanged when ai json fails schema valida
 test('clarify intent transactional persistence rolls back on exception', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess omega-3 impact on depression symptoms',
         'theme_context' => 'Psychiatry',
     ]);
@@ -203,10 +211,10 @@ test('clarify intent transactional persistence rolls back on exception', functio
         protected function applyValidatedData(array $validated): void
         {
             $this->thread->update([
-                'status' => 'interviewing',
+                'status' => ThreadStatus::Interviewing,
             ]);
 
-            throw new \RuntimeException('Forced persistence failure after partial write.');
+            throw new RuntimeException('Forced persistence failure after partial write.');
         }
     };
 
@@ -222,11 +230,11 @@ test('clarify intent transactional persistence rolls back on exception', functio
         ],
     ];
 
-    expect(fn () => $job->runPersist($validated))->toThrow(\RuntimeException::class);
+    expect(fn () => $job->runPersist($validated))->toThrow(RuntimeException::class);
 
     $thread->refresh();
 
-    expect($thread->status)->toBe('clarification_pending');
+    expect($thread->status)->toBe(ThreadStatus::ClarificationPending);
     expect($thread->theme_context)->toBe('Psychiatry');
     expect($thread->questions)->toBeNull();
 });

@@ -13,14 +13,24 @@ return new class extends Migration
     {
         Schema::create('threads', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('project_id')->constrained()->cascadeOnDelete();
+            $table->string('template_type')->index();
+
+            // Core Identity
             $table->text('objective');
-            $table->string('theme_context')->nullable();
             $table->string('status')->default('clarification_pending');
-            $table->json('questions')->nullable();
-            $table->json('answers')->nullable();
-            $table->text('nexus_yaml')->nullable();
+
+            // Interview Phase
+            $table->text('theme_context')->nullable();
+
+            // Pipeline State & Final Artifacts
+            $table->json('state_data')->nullable();
             $table->json('protocol')->nullable();
+            $table->text('export_yaml')->nullable();
+
+            // Agent Auditing
+            $table->json('agent_interactions')->nullable();
+
             $table->timestamps();
         });
     }

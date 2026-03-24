@@ -23,7 +23,9 @@ uses(RefreshDatabase::class);
 test('validate protocol job marks passed and dispatches generate export when loop count is above zero', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate behavioral interventions in chronic insomnia',
         'theme_context' => 'Sleep medicine',
         'state_data' => [
@@ -73,7 +75,9 @@ test('validate protocol job marks passed and dispatches generate export when loo
 test('validate protocol job increments loop and dispatches diagnostic critique on first failure', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Evaluate SSRI efficacy in adolescent depression',
         'theme_context' => 'Child psychiatry',
         'state_data' => [
@@ -93,7 +97,7 @@ test('validate protocol job increments loop and dispatches diagnostic critique o
     $thread->refresh();
 
     expect($thread->state_data['loop_count'] ?? null)->toBe(1);
-    expect($thread->status)->toBe('clarification_pending');
+    expect($thread->status)->toBe(\App\Enums\ThreadStatus::ClarificationPending);
 
     Event::assertDispatched(AgentNodeCompleted::class, function (AgentNodeCompleted $event) use ($thread): bool {
         return $event->threadId === $thread->id
@@ -119,7 +123,9 @@ test('validate protocol job increments loop and dispatches diagnostic critique o
 test('validate protocol job currently passes when loop count is three and does not emit agent failed', function () {
     $user = User::factory()->create();
 
-    $thread = $user->threads()->create([
+    $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+    $thread = $project->threads()->create([
+        'template_type' => \App\Enums\TemplateType::SLR,
         'objective' => 'Assess treatment effects in severe chronic fatigue',
         'theme_context' => 'Internal medicine',
         'state_data' => [
@@ -138,7 +144,7 @@ test('validate protocol job currently passes when loop count is three and does n
     $thread->refresh();
 
     expect($thread->state_data['validation_passed'] ?? null)->toBeTrue();
-    expect($thread->status)->toBe('clarification_pending');
+    expect($thread->status)->toBe(\App\Enums\ThreadStatus::ClarificationPending);
 
     Event::assertDispatched(AgentNodeCompleted::class, function (AgentNodeCompleted $event) use ($thread): bool {
         return $event->threadId === $thread->id

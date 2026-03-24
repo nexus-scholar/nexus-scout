@@ -2,13 +2,14 @@
 
 namespace App\Jobs;
 
-use App\Ai\PromptManager;
+use App\Ai\Agents\DiagnosticCritiquor;
 use App\Events\AgentNodeCompleted;
 use App\Events\AgentNodeStarted;
 use App\Models\Thread;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Laravel\Ai\Ai;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class DiagnosticCritiqueJob implements ShouldQueue
 {
@@ -28,32 +29,39 @@ class DiagnosticCritiqueJob implements ShouldQueue
     {
         broadcast(new AgentNodeStarted($this->thread->id, 'diagnostic_critique'));
 
-        $stateData = $this->thread->state_data ?? [];
-        
-        $prompts = PromptManager::getPrompts('diagnostic_critique', [
-            'queries' => $stateData['query_themes'] ?? [],
-            'missing_seeds' => $stateData['missing_seeds'] ?? ['10.1001/jamapsychiatry.2023.0001'],
-        ]);
+        try {
+            $agent = new DiagnosticCritiquor($this->thread);
+            $response = $agent->forUser($this->thread->user)
+                ->prompt($agent->getUserPrompt(), timeout: 120);
 
-        $response = \Laravel\Ai\agent($prompts['system'])
-            ->prompt($prompts['user'], timeout: 120);
+            $data = $response->toArray();
 
-        $text = $response->text;
-        if (preg_match('/```(?:json)?\s*(.*?)\s*```/is', $text, $matches)) {
-            $text = $matches[1];
+            if ($data) {
+                $stateData = $this->thread->state_data ?? [];
+                $stateData['critique'] = $data['critique'] ?? 'Analyzed missing seeds and broadening query structure.';
+                $stateData['query_themes'] = $data['themes'] ?? $stateData['query_themes'] ?? [];
+
+                $this->thread->update(['state_data' => $stateData]);
+
+                // Record interaction metadata
+                $this->thread->recordAgentInteraction(
+                    agentName: 'diagnostic_critiquor',
+                    conversationId: $response->conversationId,
+                    input: $agent->getUserPrompt(),
+                    output: $data
+                );
+            }
+
+            broadcast(new AgentNodeCompleted($this->thread->id, 'diagnostic_critique', [
+                'critique' => $stateData['critique'] ?? 'Queries rebuilt.',
+            ]));
+
+            \App\Services\WorkflowOrchestrator::dispatchNext($this->thread, 'diagnostic_critique');
+        } catch (Throwable $e) {
+            Log::error('DiagnosticCritiqueJob failed.', [
+                'thread_id' => $this->thread->id,
+                'exception' => $e->getMessage(),
+            ]);
         }
-        $data = json_decode($text, true);
-
-        if ($data) {
-            $stateData['critique'] = $data['critique'] ?? "Analyzed missing seeds and broadening query structure.";
-            
-            $this->thread->update(['state_data' => $stateData]);
-        }
-
-        broadcast(new AgentNodeCompleted($this->thread->id, 'diagnostic_critique', [
-            'critique' => $stateData['critique'] ?? 'Queries rebuilt.'
-        ]));
-
-        dispatch(new GenerateQueriesJob($this->thread));
     }
 }
