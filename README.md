@@ -1,5 +1,11 @@
 # Research Platform (Nexus + Scout)
 
+> **Status:** Prototype research-scouting platform.
+>
+> This repository is kept public as an experimental predecessor to the current Nexus Scholar stack. It combines a FastAPI research engine with a Laravel/React Scout interface to explore scholarly search, protocol workflow, and assisted review-management ideas. Current active work is represented by [`nexus-scholar/core`](https://github.com/nexus-scholar/core), [`nexus-scholar/nexus-cli`](https://github.com/nexus-scholar/nexus-cli), and [`nexus-scholar/nexus-web`](https://github.com/nexus-scholar/nexus-web).
+>
+> Treat this repo as prototype evidence, not the current supported product surface.
+
 This project consists of two main services:
 - **Nexus API**: A FastAPI-based research engine for academic search and deduplication.
 - **Scout**: A Laravel-based frontend and management platform for research workflows.
